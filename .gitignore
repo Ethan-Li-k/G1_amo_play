@@ -11,3 +11,4 @@ build/
 dist/
 .vscode/
 .idea/
+condaenv.*.requirements.txt

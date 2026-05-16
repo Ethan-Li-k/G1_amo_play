@@ -86,12 +86,26 @@ wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py310_24
 bash Miniconda3-py310_24.7.1-0-Linux-x86_64.sh -b -p $HOME/miniconda3
 source $HOME/miniconda3/etc/profile.d/conda.sh
 
-# create the env (10-15 min)
+# (one-time) configure pip to use Tsinghua mirror -- skip if already set
+mkdir -p ~/.pip
+cat > ~/.pip/pip.conf <<'EOF'
+[global]
+index-url = https://pypi.tuna.tsinghua.edu.cn/simple
+trusted-host = pypi.tuna.tsinghua.edu.cn
+timeout = 120
+EOF
+# (the conda channel side is handled by environment.yml itself, which
+# pins the Tsinghua conda-forge mirror as the first channel.)
+
+# create the env (10-15 min on Tsinghua, longer on other mirrors)
 conda env create -f environment.yml
 conda activate g1_amo_play
 
-# torch CUDA wheel (cu128 for RTX 40-series; switch URL for older CUDA)
-pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+# torch from PyPI (Tsinghua mirror) -- the wheel includes CUDA runtime,
+# so no PyTorch-specific --index-url is needed in CN. If your driver
+# doesn't support the bundled CUDA version, fall back to:
+#     pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+pip install torch==2.10.0
 
 # vendored Unitree SDK (must be -e because IDL files import via package path)
 pip install -e ./unitree_sdk2_python

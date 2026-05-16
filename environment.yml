@@ -1,42 +1,65 @@
 # conda env spec for G1_amo_play (cross-host install).
 #
-# Two-step install because:
-#   - torch needs --index-url (PyTorch's own cu128 wheel server)
-#   - the rest comes from PyPI (Tsinghua mirror keeps things fast in CN)
+# All package downloads go through Tsinghua mirrors:
+#   - conda channels: https://mirrors.tuna.tsinghua.edu.cn/anaconda/...
+#   - pip index URL : https://pypi.tuna.tsinghua.edu.cn/simple
+# (pip side is configured globally via ~/.pip/pip.conf or the
+# PIP_INDEX_URL env var; see README §2 for the cross-host setup snippet.)
 #
-# Step 1:
+# Why so many things in `dependencies:` instead of `pip:` ?
+# pinocchio + hpp-fcl + casadi + eigenpy ship native (.so) libraries.
+# The PyPI cmeel wheels (`pin`, `casadi` from PyPI) install incomplete
+# library trees -- pin imports fail with "libhpp-fcl.so: cannot open
+# shared object file". conda-forge ships proper binaries with all
+# transitive .so files in $CONDA_PREFIX/lib, which is what makes the
+# robot-control stack actually load.
+#
+# Three steps:
+#
+# Step 1 -- conda env + everything below (numpy / pinocchio / casadi /
+#           mujoco / cyclonedds / dex_retargeting / ... ):
 #   conda env create -f environment.yml
 #   conda activate g1_amo_play
 #
-# Step 2 (torch with CUDA 12.8 -- skip if your GPU/CUDA is older,
-#         and replace the URL with the right cu version):
-#   pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+# Step 2 -- torch with CUDA. PyPI torch wheels include CUDA runtime.
+#           Tsinghua PyPI mirror is enough; no PyTorch-specific index
+#           required. If your driver doesn't support the bundled CUDA
+#           version, fall back to:
+#               pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+#   pip install torch==2.10.0
 #
-# Step 3 (vendored Unitree SDK with our IDL tweaks):
+# Step 3 -- vendored Unitree SDK with our IDL tweaks (-e because the
+#           IDL stubs import via the package path):
 #   pip install -e ./unitree_sdk2_python
 #
-# Step 4 (verify):
-#   bash play.sh --parquet examples/Pull_the_tray_episode_000000.parquet
+# Step 4 -- verify (no robot needed):
+#   python -c "import torch, pinocchio, casadi, mujoco, dex_retargeting; print(\"ok\", torch.cuda.is_available())"
 #
-# Total install time: ~10-20 min depending on network. Install size ~7 GB
-# (most of which is torch + cuda libs).
+# Total install time: ~10-20 min on Tsinghua. Install size ~7 GB.
 
 name: g1_amo_play
 channels:
+  - https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
   - conda-forge
   - defaults
 dependencies:
   - python=3.10
   - pip
+
+  # Robot kinematics / dynamics with native .so libraries.
+  # pinocchio brings: libpinocchio, eigenpy, hpp-fcl/coal, urdfdom,
+  # octomap, assimp, eigen.  casadi brings: libcasadi, swig bindings.
+  - pinocchio
+  - casadi
+
+  # the rest is pure-python or has well-behaved pypi wheels
   - pip:
       # core
       - numpy==1.26.4
       - scipy==1.10.1
       - pyyaml
       - pyarrow>=14
-      # IK + dynamics (RobotTaskmaster's transitive deps)
-      - pin==2.7.0           # = pinocchio with casadi binding
-      - casadi==3.7.2
+      # IK helpers built on pinocchio
       - meshcat==0.3.2
       - pin-pink==3.4.0
       - qpsolvers==4.8.2
@@ -44,9 +67,9 @@ dependencies:
       - loop-rate-limiters==1.2.0
       # master_whole_body.py top-level `import mujoco`
       - mujoco==3.2.3
-      # Bundled teleop/robot_control/dex_retargeting/ uses anytree, lxml,
-      # nlopt, pytransform3d. Installing the pip package brings them in
-      # cleanly; the bundled (local) module wins at import time anyway.
+      # bundled teleop/robot_control/dex_retargeting/ uses anytree, lxml,
+      # nlopt, pytransform3d. installing pip dex_retargeting brings all
+      # of them; the bundled (relative-import) module wins at runtime.
       - dex_retargeting==0.4.6
       # DDS transport (Unitree SDK pinned to this exact wire format)
       - cyclonedds==0.10.2

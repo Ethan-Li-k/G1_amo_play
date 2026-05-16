@@ -1,0 +1,54 @@
+# conda env spec for G1_amo_play (cross-host install).
+#
+# Two-step install because:
+#   - torch needs --index-url (PyTorch's own cu128 wheel server)
+#   - the rest comes from PyPI (Tsinghua mirror keeps things fast in CN)
+#
+# Step 1:
+#   conda env create -f environment.yml
+#   conda activate g1_amo_play
+#
+# Step 2 (torch with CUDA 12.8 -- skip if your GPU/CUDA is older,
+#         and replace the URL with the right cu version):
+#   pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu128
+#
+# Step 3 (vendored Unitree SDK with our IDL tweaks):
+#   pip install -e ./unitree_sdk2_python
+#
+# Step 4 (verify):
+#   bash play.sh --parquet examples/Pull_the_tray_episode_000000.parquet
+#
+# Total install time: ~10-20 min depending on network. Install size ~7 GB
+# (most of which is torch + cuda libs).
+
+name: g1_amo_play
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # core
+      - numpy==1.26.4
+      - scipy==1.10.1
+      - pyyaml
+      - pyarrow>=14
+      # IK + dynamics (RobotTaskmaster's transitive deps)
+      - pin==2.7.0           # = pinocchio with casadi binding
+      - casadi==3.7.2
+      - meshcat==0.3.2
+      - pin-pink==3.4.0
+      - qpsolvers==4.8.2
+      - quadprog==0.1.13
+      - loop-rate-limiters==1.2.0
+      # master_whole_body.py top-level `import mujoco`
+      - mujoco==3.2.3
+      # Bundled teleop/robot_control/dex_retargeting/ uses anytree, lxml,
+      # nlopt, pytransform3d. Installing the pip package brings them in
+      # cleanly; the bundled (local) module wins at import time anyway.
+      - dex_retargeting==0.4.6
+      # DDS transport (Unitree SDK pinned to this exact wire format)
+      - cyclonedds==0.10.2
+      # transitive (declared so it surfaces in pip freeze)
+      - opencv-python
